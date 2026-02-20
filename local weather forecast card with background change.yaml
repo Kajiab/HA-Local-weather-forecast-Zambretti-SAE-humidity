@@ -22,6 +22,10 @@ card_mod:
       background-size: cover !important;
       background-position: center !important;
       transition: all 0.5s ease;
+
+      /* รูปต้องอยู่ที่: /config/www/weather/sunny.jpg  */
+      /* ในโค้ดต้องอ้างอิงเป็น: /local/weather/sunny.jpg, cloudy.jpg, rainy.jpg */
+
       
       /* 4. การทำ Aura แวบๆ (Glow Animation) */
       box-shadow: 0 0 15px 5px {{ aura }} !important;
