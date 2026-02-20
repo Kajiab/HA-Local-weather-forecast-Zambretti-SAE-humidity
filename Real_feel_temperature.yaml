@@ -1,0 +1,28 @@
+template:
+  - sensor:
+      - name: "Local RealFeel Temperature"
+        unique_id: local_real_feel_temp_ayutthaya
+        unit_of_measurement: "°C"
+        state: >-
+          {% set T = states('sensor.weatherstation_temperature') | float(none) %}
+          {% set R = states('sensor.weatherstation_humidity') | float(none) %}
+          
+          {% if T is not none and R is not none %}
+            {% if T >= 27 %}
+              {% set HI = -8.78469475556 + (1.61139411 * T) + (2.33854883889 * R) + (-0.14611605 * T * R) + (-0.012308094 * T**2) + (-0.0164248277778 * R**2) + (0.002211732 * T**2 * R) + (0.00072546 * T * R**2) + (-0.000003582 * T**2 * R**2) %}
+              {{ HI | round(1) }}
+            {% else %}
+              {{ T | round(1) }}
+            {% endif %}
+          {% else %}
+            unknown
+          {% endif %}
+        attributes:
+          level: >-
+            {% set hi = states('sensor.local_real_feel_temperature') | float(0) %}
+            {% if hi >= 54 %} "Extreme Danger"
+            {% elif hi >= 41 %} "Danger"
+            {% elif hi >= 32 %} "Extreme Caution"
+            {% elif hi >= 27 %} "Caution"
+            {% else %} "Comfortable"
+            {% endif %}
