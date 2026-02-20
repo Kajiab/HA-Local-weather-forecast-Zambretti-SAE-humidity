@@ -1,0 +1,432 @@
+# ============================
+# 12h Local Weather Forecast (Zambretti) - Optimized Version
+# Based on original community blueprint, adapted & hardened
+# ============================
+
+template:
+  - sensor:
+      # ------------------------------------------------------
+      # MAIN AGGREGATE SENSOR
+      # ------------------------------------------------------
+      - name: "Local forecast"
+        unique_id: local_forecast
+        state: >-
+          {# Language: 0 = Thai, 1 = English #}
+          {% set language = 1 %}
+          {% set title = ["พยากรณ์อากาศ 12 ชั่วโมง", "12hr Local Weather Forecast"] %}
+          {{ title[language] }}
+        attributes:
+          language: >-
+            {# 0 = TH, 1 = EN (default) #}
+            {% set language = 1 %}
+            {{ language }}
+
+          temperature: >-
+            {# setup sensor to actual sensor in HA #}
+            {% set temp = states('sensor.weatherstation_temperature') | float(33) %}
+            {{ temp }}
+
+          humidity: >-
+            {% set hum = states('sensor.weatherstation_humidity') | float(70) %}
+            {{ hum }}
+
+          p0: >-
+            {# pressure sensor ที่ระดับตำแหน่งปัจจุบัน (ไม่ใช่ระดับน้ำทะเล) #}
+            {% set pressure = states('sensor.weatherstation_barometer_absolute') | float(1011) %}
+            {# pressure_sea: 1 = sensor วัดที่ระดับน้ำทะเลแล้ว, 0 = ต้องคำนวณเอง #}
+            {% set pressure_sea = 0 %}
+            
+            {# setup actual sensor height from sea level #}
+            {% set height = 3 %}
+            
+            {#  (fallback = 33°C) #}
+            {% set temp = states('sensor.weatherstation_temperature') | float(33) %}
+
+            {% if pressure_sea == 1 %}
+              {% set p0 = pressure %}
+            {% else %}
+              {# Convert pressure to sea level #}
+              {% set p0 = pressure * (1 - ((0.0065 * height) / (temp + (0.0065 * height) + 273.15))) ** -5.257 %}
+            {% endif %}
+            {{ p0 | round(1) }}
+
+          # สำหรับเวอร์ชันนี้ ยังไม่ใช้ลมจริง → ตั้งเป็น 0 กัน error
+          wind_direction: >-
+            {{ 0 | int }}
+
+          forecast_short_term: >-
+            {# Forecast from pressure #}
+            {% set language = state_attr('sensor.local_forecast', 'language') | int(1) %}
+            {% set conditions = [
+              ('พายุ/ฝนตกหนัก', 'Stormy'),
+              ('ฝนตก/เมฆมาก', 'Rainy, Cloudy'),
+              ('ทั่วไป', 'Normal/Mixed'),
+              ('แดดออก/ฟ้าใส', 'Sunny/Clear'),
+              ('อากาศแห้ง/หนาว', 'Cold/Extra Dry')
+            ] %}
+            {% set pressure_system = [
+              ('ระบบความกดอากาศต่ำ', 'Low Pressure System'),
+              ('ทั่วไป', 'Normal'),
+              ('ระบบความกดอากาศสูง', 'High Pressure System')
+            ] %}
+
+            {% set p0 = state_attr('sensor.local_forecast', 'p0') | float(0) %}
+
+            {% if p0 < 1005 %}
+              {% set current_condition = [conditions[0][language], pressure_system[0][language]] %}
+            {% elif 1005 <= p0 < 1009 %}
+              {% set current_condition = [conditions[1][language], pressure_system[0][language]] %}
+            {% elif 1009 <= p0 < 1014 %}
+              {% set current_condition = [conditions[2][language], pressure_system[1][language]] %}
+            {% elif 1014 <= p0 < 1018 %}
+              {% set current_condition = [conditions[3][language], pressure_system[2][language]] %}
+            {% else %}
+              {% set current_condition = [conditions[4][language], pressure_system[2][language]] %}
+            {% endif %}
+            {{ current_condition }}
+
+          forecast_zambretti: >-
+            {# Forecast by Zambretti + influent of Pressure, Humidity and Temperature #}
+            {% set language = state_attr('sensor.local_forecast', 'language') | int(1) %}
+            {% set p0 = state_attr('sensor.local_forecast', 'p0') | float(1011) %}
+            {% set p0change = states('sensor.local_forecast_pressurechange') | float(0) %}
+            {% set tempchange = states('sensor.local_forecast_temperaturechange') | float(0) %}
+            {% set hum = state_attr('sensor.local_forecast', 'humidity') | float(70) %}
+            {% set humiditychange = states('sensor.local_forecast_humiditychange') | float(0) %}
+
+            {# trend: -1 = falling, 0 = steady, 1 = rising #}
+            {% if p0change <= -1.6 %}
+              {% set trend = -1 %}
+            {% elif p0change >= 1.6 %}
+              {% set trend = 1 %}
+            {% else %}
+              {% set trend = 0 %}
+            {% endif %}
+            
+            {# Calculate Z #}
+            {% if trend == -1 %}
+              {# falling pressure #}
+              {% set z = (127 - 0.12 * p0) | round(0) | int %}
+              {# Adjust Z from humidity and temperature, High %RH + Low temperature more risk of rain #}
+              {% if humiditychange > 5.0 or hum > 85 or tempchange < -1.5 %}
+                {% set z = z + 3 %}
+              {% endif %}
+            {% elif trend == 0 %}
+              {# steady pressure #}
+              {% set z = (144 - 0.13 * p0) | round(0) | int %}
+              {% if hum > 85 and tempchange < -0.5 %}
+                {% set z = z + 2 %}
+              {% endif %}
+              {# Adjust Z from season, Summer is more risk #}
+              {% if 2 < now().month < 10 %}
+                {% set z = z %}
+              {% else %}
+                {% set z = z - 1 %}
+              {% endif %}
+            {% elif trend == 1 %}
+              {# rising pressure #}
+              {% set z = (185 - 0.16 * p0) | round(0) | int %}
+              {% if humiditychange < -5.0 and tempchange > 0 %}
+                {% set z = z - 1 %}
+              {% endif %}
+              {% if 2 < now().month < 10 %}
+                {% set z = z + 1 %}
+              {% else %}
+                {% set z = z %}
+              {% endif %}
+            {% else %}
+              {% set z = 16 %}
+            {% endif %}
+
+            {# Guard: z between 1–32 #}
+            {% if z < 1 %}
+              {% set z = 1 %}
+            {% elif z > 32 %}
+              {% set z = 32 %}
+            {% endif %}
+
+            {# Z (ไทย/อังกฤษ) #}
+            {% set t_lang = [
+              ('อากาศแจ่มใส','1 Settled Fine'),
+              ('อากาศดี','2 Fine Weather'),
+              ('อากาศดี มีเมฆบางส่วน','3 Fine, Becoming Less Settled'),
+              ('อากาศค่อนข้างดี อาจมีละอองฝน','4 Fairly Fine, Showery Later'),
+              ('มีละอองฝน แนวโน้มแย่ลง','5 Showery, Becoming More Unsettled'),
+              ('อากาศแปรปรวน อาจมีฝนตก','6 Unsettled, Rain Later'),
+              ('ฝนตก แนวโน้มแย่ลง','7 Rain at Times, Worse Later'),
+              ('ฝนตก อากาศแปรปรวน','8 Rain at Times, Becoming Very Unsettled'),
+              ('อากาศดี อาจมีละอองฝน','12 Fine, Possibly Showers'),
+              ('ฟ้าครึ้ม มีละอองฝน','13 Fairly Fine, Showers Likely'),
+              ('ฝนกระจาย สลับแดด','14 Showery, Bright Intervals'),
+              ('ฝนตกๆหยุดๆ','15 Changeable, Some Rain'),
+              ('อากาศแปรปรวน ฝนอาจตก','16 Unsettled, Rain at Times'),
+              ('ฝนตกเป็นช่วงๆ','17 Rain at Frequent Intervals'),
+              ('อากาศแนวโน้มดีขึ้น','22 Becoming Fine'),
+              ('ฟ้าครึ้ม แนวโน้มดีขึ้น','23 Fairly Fine, Improving'),
+              ('ฟ้าครึ้ม อาจมีฝนกระจาย','24 Fairly Fine, Possibly Showers Early'),
+              ('ฝนกระจาย แนวโน้มดีขึ้น','25 Showery Early, Improving'),
+              ('อากาศแปรปรวน','26 Changeable, Mending'),
+              ('อากาศแปรปรวนและจะท้องฟ้าแจ่มใส','27 Rather Unsettled, Clearing Later'),
+              ('อากาศแปรปรวน อาจจะดีขึ้น','28 Unsettled, Probably Improving'),
+              ('อากาศแปรปรวน อากาศดีช่วงสั้นๆ','29 Unsettled, Short Fine Intervals'),
+              ('อากาศแปรปรวนมาก กำลังจะดีขึ้น','30 Very Unsettled, Finer at Times'),
+              ('อากาศแปรปรวนมาก ฝนตก','9 Very Unsettled, Rain'),
+              ('พายุฝน อากาศแนวโน้มดีขึ้น','31 Stormy, Possibly Improving'),
+              ('พายุฝนกระหน่ำ','32 Stormy, Much Rain')
+            ] %}
+
+            {# Mapping Z → index ใน t_lang #}
+            {% set map = {
+              1:0, 10:0, 20:0,
+              2:1, 11:1, 21:1, 22:2,
+              3:3, 12:4, 23:5, 24:6,
+              4:7, 25:8, 26:9,
+              13:10, 27:11, 28:12,
+              14:13,
+              5:14, 15:15, 29:16,
+              6:17, 16:18, 30:19,
+              7:20, 8:21, 17:22,
+              9:23, 18:23, 31:24,
+              19:25, 32:25
+            } %}
+
+            {% set type = map.get(z | int(0), 9) %}
+            {% set alpha = "ABCDEFGHIJKLMNOPQRSTUVWXYZ" %}
+            {% set type_l = alpha[type] if 0 <= type <= 25 else "none" %}
+
+            {{ [ t_lang[type][language], type, type_l ] }}
+
+          forecast_pressure_trend: >-
+            {% set p0change = states('sensor.local_forecast_pressurechange') | float(0) %}
+            {% set language = state_attr('sensor.local_forecast', 'language') | int(1) %}
+            {% set trend_lang = [
+              ('กำลังลดลง','Falling'),
+              ('กำลังเพิ่มขึ้น','Rising'),
+              ('คงที่','Steady')
+            ] %}
+            {% if p0change <= -1.6 %}
+              {% set trend = 0 %}
+            {% elif p0change >= 1.6 %}
+              {% set trend = 1 %}
+            {% else %}
+              {% set trend = 2 %}
+            {% endif %}
+            {{ [ trend_lang[trend][language], trend ] }}
+
+          forecast_temp_short: >-
+            {# Forecast for short time #}
+            {% set temp = state_attr('sensor.local_forecast', 'temperature') | float(33) %}
+            {% set temp_change = states('sensor.local_forecast_temperaturechange') | float(0) %}
+            {% set first_time = state_attr('sensor.local_forecast_zambretti_detail', 'first_time') | default([0, 0]) %}
+            {% set second_time = state_attr('sensor.local_forecast_zambretti_detail', 'second_time') | default([0, 0]) %}
+            {% set first_minutes = first_time[1] | float(0) %}
+            {% set second_minutes = second_time[1] | float(0) %}
+
+            {% if first_minutes > 0 %}
+              {% set t_forecast = (temp_change / 60 * first_minutes + temp) | round(1) %}
+              {% set interval = 0 %}
+            {% elif second_minutes > 0 %}
+              {% set t_forecast = (temp_change / 60 * second_minutes + temp) | round(1) %}
+              {% set interval = 1 %}
+            {% else %}
+              {% set t_forecast = "unavailable" %}
+              {% set interval = -1 %}
+            {% endif %}
+            {{ [ t_forecast, interval ] }}
+
+      # ------------------------------------------------------
+      # DETAIL SENSOR FOR ZAMBRETTI
+      # ------------------------------------------------------
+      - name: "Local forecast zambretti detail"
+        unique_id: local_forecast_zambretti_detail
+        state: >-
+          {% set z_list = state_attr('sensor.local_forecast', 'forecast_zambretti') | default([None, 0, '']) %}
+          {% set z_num = (z_list[1] | int(0)) + 1 %}
+          {{ "More details on zambretti forecast: Z=" ~ z_num }}
+
+        attributes:
+          forecast: >-
+            {% set z_list = state_attr('sensor.local_forecast', 'forecast_zambretti') | default([None, 0, '']) %}
+            {% set z = (z_list[1] | int(0)) + 1 %}
+            {# Z เป็น [icon_next6h, icon_next12h] #}
+            {% if z == 1 %}{% set forecast = [0, 0] %}
+            {% elif z == 2 %}{% set forecast = [1, 1] %}
+            {% elif z == 3 %}{% set forecast = [2, 1] %}
+            {% elif z == 4 %}{% set forecast = [1, 2] %}
+            {% elif z == 5 %}{% set forecast = [1, 1] %}
+            {% elif z == 6 %}{% set forecast = [1, 0] %}
+            {% elif z == 7 %}{% set forecast = [2, 1] %}
+            {% elif z == 8 %}{% set forecast = [1, 4] %}
+            {% elif z == 9 %}{% set forecast = [4, 2] %}
+            {% elif z == 10 %}{% set forecast = [4, 4] %}
+            {% elif z == 11 %}{% set forecast = [1, 1] %}
+            {% elif z == 12 %}{% set forecast = [3, 1] %}
+            {% elif z == 13 %}{% set forecast = [3, 3] %}
+            {% elif z == 14 %}{% set forecast = [2, 2] %}
+            {% elif z == 15 %}{% set forecast = [4, 5] %}
+            {% elif z == 16 %}{% set forecast = [4, 4] %}
+            {% elif z == 17 %}{% set forecast = [2, 2] %}
+            {% elif z == 18 %}{% set forecast = [2, 4] %}
+            {% elif z == 19 %}{% set forecast = [2, 2] %}
+            {% elif z == 20 %}{% set forecast = [5, 5] %}
+            {% elif z == 21 %}{% set forecast = [2, 4] %}
+            {% elif z == 22 %}{% set forecast = [4, 4] %}
+            {% elif z == 23 %}{% set forecast = [4, 4] %}
+            {% elif z == 24 %}{% set forecast = [6, 4] %}
+            {% elif z == 25 %}{% set forecast = [6, 6] %}
+            {% else %}{% set forecast = [3, 3] %}
+            {% endif %}
+            {{ forecast }}
+
+          rain_prob: >-
+            {% set forecast = this.attributes.forecast | default([0, 0]) %}
+            {% if forecast[0] == 0 and forecast[1] == 0 %}
+              {% set rain_prob = [0, 0] %}
+            {% elif forecast[0] == 2 and forecast[1] == 1 %}
+              {% set rain_prob = [60, 10] %}
+            {% elif forecast[0] == 1 and forecast[1] == 1 %}
+              {% set rain_prob = [30, 30] %}
+            {% elif forecast[0] == 1 and forecast[1] == 0 %}
+              {% set rain_prob = [10, 0] %}
+            {% elif forecast[0] == 1 and forecast[1] >= 2 %}
+              {% set rain_prob = [20, 60] %}
+            {% elif forecast[0] == 2 and forecast[1] == 2 %}
+              {% set rain_prob = [50, 50] %}
+            {% elif forecast[0] == 2 and forecast[1] > 2 %}
+              {% set rain_prob = [50, 70] %}
+            {% elif forecast[0] >= 2 and forecast[1] < 2 %}
+              {% set rain_prob = [50, 10] %}
+            {% else %}
+              {% set rain_prob = [90, 90] %}
+            {% endif %}
+            {{ rain_prob }}
+
+          icons: >-
+            {% set forecast = this.attributes.forecast | default([0, 0]) %}
+            {% set conditions = [
+              ('mdi:weather-sunny','mdi:weather-night'),
+              ('mdi:weather-partly-cloudy','mdi:weather-night-partly-cloudy'),
+              ('mdi:weather-partly-rainy','mdi:weather-partly-rainy'),
+              ('mdi:weather-cloudy','mdi:weather-cloudy'),
+              ('mdi:weather-rainy','mdi:weather-rainy'),
+              ('mdi:weather-pouring','mdi:weather-pouring'),
+              ('mdi:weather-lightning-rainy','mdi:weather-lightning-rainy')
+            ] %}
+            {% if is_state('sun.sun', 'below_horizon') %}
+              {% set daynight = 1 %}
+            {% else %}
+              {% set daynight = 0 %}
+            {% endif %}
+            {% set icon_now = conditions[forecast[0] | int(0)][daynight] %}
+            {% set icon_later = conditions[forecast[1] | int(0)][daynight] %}
+            {{ [icon_now, icon_later] }}
+
+          first_time: >-
+            {# time เวลาที่สภาพอากาศครั้งแรกจะเปลี่ยน #}
+            {% set obj = states.sensor.local_forecast_zambretti_detail %}
+            {% set last_time = 
+                 as_timestamp(obj.last_changed) 
+                 if obj is not none and obj.last_changed is not none 
+                 else as_timestamp(now())
+            %}
+
+            {% set halftime = 6*60 - (as_timestamp(now()) - last_time) / 60 %}
+
+            {% if halftime < 0 %}
+              {% set correction = 6 + (halftime / 60 | float(0)) %}
+            {% else %}
+              {% set correction = 0 %}
+            {% endif %}
+
+            {% set time_offset_first = 3 + correction %}
+            {% set time_to = time_offset_first*60 - (as_timestamp(now()) - last_time) / 60 %}
+            {% set ts = as_timestamp(now()) + time_to*60 %}
+
+            {{ [ ts | timestamp_custom('%H:%M'), time_to | round(2) ] }}
+
+          second_time: >-
+            {# time เวลาที่สภาพอากาศครั้งที่สองจะเปลี่ยน #}
+            {% set last_obj = states.sensor.local_forecast_zambretti_detail %}
+            {# check ตรวจว่ามี object และ last_changed ใช้งานได้ #}
+            {% if last_obj is not none and last_obj.last_changed is not none %}
+              {% set last_time = as_timestamp(last_obj.last_changed) %}
+            {% else %}
+              {% set last_time = as_timestamp(now()) %}
+            {% endif %}
+            
+            {% set halftime = 6*60 - (as_timestamp(now()) - last_time) / 60 %}
+
+            {% if halftime < 0 %}
+              {% set correction = 6 + (halftime / 60 | float(0)) %}
+            {% else %}
+              {% set correction = 0 %}
+            {% endif %}
+
+            {% set time_offset_second = 9 + correction %}
+            {% set time_to = time_offset_second*60 - (as_timestamp(now()) - last_time) / 60 %}
+            {% set ts = as_timestamp(now()) + time_to*60 %}
+
+            {{ [ ts | timestamp_custom('%H:%M'), time_to | round(2) ] }}
+
+  # ------------------------------------------------------
+  # WRAPPER SENSORS สำหรับ HASS STATISTICS / กราฟ
+  # ------------------------------------------------------
+  - sensor:
+      - name: "Local forecast pressure"
+        unique_id: local_forecast_pressure
+        unit_of_measurement: "mbar"
+        device_class: atmospheric_pressure
+        availability: >-
+          {{ state_attr('sensor.local_forecast', 'p0') is number }}
+        state: >-
+          {{ state_attr('sensor.local_forecast', 'p0') | float( states('sensor.local_forecast_pressure') | float(1011) ) }}
+
+      - name: "Local forecast temperature"
+        unique_id: local_forecast_temperature
+        unit_of_measurement: "°C"
+        device_class: temperature
+        availability: >-
+          {{ state_attr('sensor.local_forecast', 'temperature') is number }}
+        state: >-
+          {{ state_attr('sensor.local_forecast', 'temperature') | float( states('sensor.local_forecast_temperature') | float(33) ) }}
+
+      - name: "Local forecast humidity"
+        unique_id: local_forecast_humidity
+        unit_of_measurement: "%"
+        device_class: humidity
+        availability: >-
+          {{ state_attr('sensor.local_forecast', 'humidity') is number }}
+        state: >-
+          {{ state_attr('sensor.local_forecast', 'humidity') | float( states('sensor.local_forecast_humidity') | float(70) ) }}
+
+
+# ------------------------------------------------------
+# STATISTICS SENSORS (ใช้คำนวณ trend / change)
+# ------------------------------------------------------
+sensor:
+  # pressure change
+  - platform: statistics
+    name: Local forecast PressureChange
+    entity_id: sensor.local_forecast_pressure
+    state_characteristic: change
+    max_age:
+      minutes: 180
+    sampling_size: 50
+
+  # temperature change
+  - platform: statistics
+    name: Local forecast TemperatureChange
+    entity_id: sensor.local_forecast_temperature
+    state_characteristic: change
+    max_age:
+      minutes: 180
+    sampling_size: 50
+
+  # humidity change
+  - platform: statistics
+    name: Local forecast HumidityChange
+    entity_id: sensor.local_forecast_humidity
+    state_characteristic: change
+    max_age:
+      minutes: 180
+    sampling_size: 50
