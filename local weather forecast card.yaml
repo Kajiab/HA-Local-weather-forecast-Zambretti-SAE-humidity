@@ -1,0 +1,43 @@
+type: custom:vertical-stack-in-card
+card_mod:
+  style: |
+    ha-card {
+      {# 1. ดึงค่าจาก Attribute อย่างปลอดภัย พร้อมค่า Default เป็น 'A' ถ้าหาไม่เจอ #}
+      {% set t_l = state_attr('sensor.local_forecast', 'type_l') | default('A', true) %}
+      
+      {# 2. กำหนดรูปและสี Aura #}
+      {% if t_l in ['A','B','C'] %}
+        {% set bg = "sunny.jpg" %}
+        {% set aura = "rgba(255, 215, 0, 0.6)" %}
+      {% elif t_l in ['X','Y','Z'] %}
+        {% set bg = "stormy.jpg" %}
+        {% set aura = "rgba(255, 0, 0, 0.8)" %}
+      {% elif t_l in ['Q','R','S','T','U','V','W'] %}
+        {% set bg = "rainy.jpg" %}
+        {% set aura = "rgba(0, 191, 255, 0.7)" %}
+      {% else %}
+        {% set bg = "cloudy.jpg" %}
+        {% set aura = "rgba(169, 169, 169, 0.5)" %}
+      {% endif %}
+
+      {# 3. คำสั่ง CSS (เพิ่ม !important ทุกบรรทัดป้องกัน Mushroom ทับ) #}
+      background-image: url("/local/weather/{{ bg }}") !important;
+      background-size: cover !important;
+      background-position: center !important;
+      background-repeat: no-repeat !important;
+      
+      {# 4. Aura Glow Pulse #}
+      box-shadow: 0 0 15px 5px {{ aura }} !important;
+      animation: aura-pulse 3s infinite alternate !important;
+    }
+
+    @keyframes aura-pulse {
+      0% { box-shadow: 0 0 5px 2px {{ aura }}; }
+      100% { box-shadow: 0 0 20px 8px {{ aura }}; }
+    }
+
+    {# ปรับ Text ให้อ่านออกบนรูปภาพ #}
+    ha-card {
+      --primary-text-color: white !important;
+      --secondary-text-color: #f0f0f0 !important;
+    }
