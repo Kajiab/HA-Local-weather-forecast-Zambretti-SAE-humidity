@@ -1,0 +1,9 @@
+alias: "Manual Rain Logger"
+trigger:
+  - platform: state
+    entity_id: input_button.mark_rain
+action:
+  - service: notify.weather_logger
+    data:
+      message: >
+        {{ now().strftime('%Y-%m-%d %H:%M:%S') }},{{ states('sensor.weatherstation_temperature') }},{{ states('sensor.weatherstation_humidity') }},{{ state_attr('sensor.local_forecast', 'p0') }},{{ states('sensor.local_dew_point') }},{{ states('sensor.local_forecast_zambretti') }},{{ states('sensor.local_forecast_pressurechange') }},{{ states('sensor.local_forecast_trend') }},"RAIN_ACTUAL"
