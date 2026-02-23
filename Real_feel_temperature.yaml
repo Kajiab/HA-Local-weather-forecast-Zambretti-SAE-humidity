@@ -1,7 +1,7 @@
 template:
   - sensor:
       - name: "Local RealFeel Temperature"
-        unique_id: local_real_feel_temp_ayutthaya
+        unique_id: local_real_feel_temp
         unit_of_measurement: "°C"
         state: >-
           {% set T = states('sensor.weatherstation_temperature') | float(none) %}
@@ -15,14 +15,23 @@ template:
               {{ T | round(1) }}
             {% endif %}
           {% else %}
-            unknown
+            {{ states('sensor.weatherstation_temperature') | float(0) | round(1) }}
           {% endif %}
         attributes:
           level: >-
-            {% set hi = states('sensor.local_real_feel_temperature') | float(0) %}
-            {% if hi >= 54 %} "Extreme Danger"
-            {% elif hi >= 41 %} "Danger"
-            {% elif hi >= 32 %} "Extreme Caution"
-            {% elif hi >= 27 %} "Caution"
-            {% else %} "Comfortable"
+            {% set hi_state = states('sensor.local_real_feel_temperature') %}
+            {% if is_number(hi_state) %}
+              {% set hi = hi_state | float %}
+              {% if hi >= 54 %} "Extreme Danger"
+              {% elif hi >= 41 %} "Danger"
+              {% elif hi >= 32 %} "Extreme Caution"
+              {% elif hi >= 27 %} "Caution"
+              {% else %} "Comfortable"
+              {% endif %}
+            {% else %}
+              "Waiting for data..."
             {% endif %}
+        # 3. จุดสำคัญ: บอกระบบว่าอย่าเพิ่งรันถ้าเซ็นเซอร์หลักยังไม่พร้อม
+        availability: >-
+          {{ is_number(states('sensor.weatherstation_temperature')) and 
+             is_number(states('sensor.weatherstation_humidity')) }}
