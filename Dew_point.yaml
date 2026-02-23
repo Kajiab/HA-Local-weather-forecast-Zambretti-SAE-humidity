@@ -1,0 +1,32 @@
+- name: "Local Dew Point"
+        unique_id: local_dew_point
+        unit_of_measurement: "°C"
+        state: >-
+          {# ใช้ค่า T และ R จาก Weather Station #}
+          {% set T = states('sensor.weatherstation_temperature') | float(none) %}
+          {% set R = states('sensor.weatherstation_humidity') | float(none) %}
+          
+          {% if is_number(T) and is_number(R) %}
+            {# สูตร Magnus-Tetens ที่แม่นยำสำหรับช่วงอุณหภูมิ 0-50 องศา #}
+            {% set a = 17.27 %}
+            {% set b = 237.7 %}
+            {% set gamma = ((a * T) / (b + T)) + log(R / 100.0) %}
+            {% set dew = (b * gamma) / (a - gamma) %}
+            {{ dew | round(1) }}
+          {% else %}
+            {# ถ้าค่าต้นทางยังไม่มา ให้ดึงค่าเดิม หรือระบุค่า Default #}
+            {{ states('sensor.local_dew_point') | float(0) | round(1) }}
+          {% endif %}
+        availability: >-
+          {{ is_number(states('sensor.weatherstation_temperature')) and 
+             is_number(states('sensor.weatherstation_humidity')) }}
+        attributes:
+          comfort_level: >-
+            {% set dp = states('sensor.local_dew_point') | float(0) %}
+            {% if dp >= 26 %} "อบอ้าวจัด (Very Oppressive)"
+            {% elif dp >= 24 %} "เหนียวตัวมาก (Oppressive)"
+            {% elif dp >= 21 %} "เริ่มอึดอัด (Sticky)"
+            {% elif dp >= 18 %} "เริ่มรู้สึกชื้น (Humid)"
+            {% elif dp >= 13 %} "สบาย (Comfortable)"
+            {% else %} "แห้งสดชื่น (Dry)"
+            {% endif %}
