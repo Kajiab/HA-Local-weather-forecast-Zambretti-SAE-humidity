@@ -1,0 +1,21 @@
+alias: "Weather Data Logger to CSV"
+description: "บันทึกข้อมูลอากาศพร้อมส่งเข้า AI"
+trigger:
+  - platform: time_pattern
+    minutes: "/30" # ปรับมาบันทึกทุก 30 นาที ข้อมูลจะละเอียดขึ้นสำหรับ AI
+  - platform: numeric_state
+    entity_id: sensor.local_forecast_zambretti
+    above: 25 # บันทึกทันทีเมื่อเริ่มเข้าโซนอันตราย
+action:
+  - service: notify.weather_logger
+    data:
+      message: >
+        {% set T = states('sensor.weatherstation_temperature') | float(0) %}
+        {% set R = states('sensor.weatherstation_humidity') | float(0) %}
+        {% set P = state_attr('sensor.local_forecast', 'p0') | float(0) %}
+        {% set DP = states('sensor.local_dew_point') | float(0) %}
+        {% set Z = states('sensor.local_forecast_zambretti') | int(0) %}
+        {% set PC = states('sensor.local_forecast_pressurechange') | float(0) %}
+        {% set TR = states('sensor.local_forecast_trend') %} {# ดึงค่า -1, 0, 1 #}
+        
+        {{ now().strftime('%Y-%m-%d %H:%M:%S') }},{{ T }},{{ R }},{{ P }},{{ DP }},{{ Z }},{{ PC }},{{ TR }},"N/A"

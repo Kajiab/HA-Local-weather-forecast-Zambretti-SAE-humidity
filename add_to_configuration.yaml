@@ -1,0 +1,10 @@
+# configuration.yaml
+homeassistant:
+  allowlist_external_dirs:
+    - "/config"
+
+notify:
+  - name: weather_logger
+    platform: file
+    filename: weather_history.csv
+    timestamp: false # เราจะเขียน Timestamp เองในรูปแบบ CSV
