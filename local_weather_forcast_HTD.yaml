@@ -56,7 +56,7 @@ template:
             ('High Pressure')
           ] %}
 
-          {% set p0 = state_attr('sensor.home_forecast_data_forecast', 'p0') | float(1011) %}
+          {% set p0 = state_attr('sensor.home_forecast_data', 'p0') | float(1011) %}
           {% set temp = state_attr('sensor.home_forecast_data', 'temperature') | float(33) %}
           {% set hum = state_attr('sensor.home_forecast_data', 'humidity') | float(70) %}
 
@@ -114,7 +114,8 @@ template:
           {{ f.res }}
 
           icon_code: >-
-            
+            {% set status = state_attr('sensor.home_forecast_now', 'weather_now')[0] %}
+            {% set is_night = is_state('sun.sun', 'below_horizon') %}
             {% if status == 'Rainy' %} mdi:weather-pouring
             {% elif status == 'Stormy' %} mdi:weather-lightning-rainy
             {% elif status == 'Cloudy' %} mdi:weather-cloudy
@@ -134,16 +135,26 @@ template:
           {% set h_change = states('sensor.home_forecast_humiditychange') | float(0) %}
           {% set t_change = states('sensor.home_forecast_temperaturechange') | float(0) %}
           {% set t_change = states('sensor.home_forecast_dewpointchange') | float(0) %}
+          {% set p_change_24h = states('sensor.home_forecast_pressurechange24hr') | float(0) %}
           
-          {% if p0 < 1005 %}
-            {{ 'Rainy' if hum > 80 else 'Cloudy' if hum > 60 else 'Clear' }}
-          {% elif p0 < 1012 %}
-            {{ 'Cloudy' if hum > 70 else 'Partly Cloudy' }}
+          {% if p_change_24h < -3.0 %}
+             {# Big pressure drop usually means a Typhoon or Monsoon Depression #}
+             Stormy
+          {% elif hum_now > 85 and (t_now - dew_now) < 2 %}
+             {# Air is saturated and cooling #}
+             Rainy
+          {% elif h_change > 10 and hum_now > 75 %}
+             {# Humidity is spiking fast - common before afternoon rain #}
+             Rainy
+          {% elif p_now < 1008 and hum_now > 70 %}
+             Cloudy
+          {% elif p_now > 1012 and hum_now < 65 %}
+             Sunny/Clear
           {% else %}
-            {{ 'Sunny/Clear' if hum < 60 else 'Mixed' }}
+             Partly Cloudy
           {% endif %}
-        attributes:
 
+        attributes:
           icon_code: >-
             {% set status = states('sensor.home_forecast_next') %}
             {% set is_night = is_state('sun.sun', 'below_horizon') %}
@@ -165,6 +176,14 @@ sensor:
     max_age:
       minutes: 180
     sampling_size: 50
+    
+  - platform: statistics
+    name: Home forecast PressureChange24hr
+    entity_id: sensor.living_room_pressure
+    state_characteristic: change
+    max_age:
+      minutes: 1440
+    sampling_size: 200
 
   # temperature change
   - platform: statistics
