@@ -2,6 +2,8 @@
 Per observation, due to Zambretti not so suitable for tropical climate which weather have local change.
 So, it's not so precised forecast from pressure need to more fine tune by integrate humidity and temperature to Z calculation. 
 Or need to develop shorterm forecast by humidity and temperature model.
+Using file subfix HTD (Humidity Temperature Dewpoint) for tropical area
+
 
 Refered and modified code from
 https://github.com/HAuser1234/homeassistant-local-weather-forecast
