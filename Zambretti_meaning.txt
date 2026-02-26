@@ -1,0 +1,29 @@
+Zambretti Forecast Meanings (A–Z)
+Each forecast describes the expected weather conditions over the next 12 hours. 
+Code 	Forecast Statement	Meaning
+A	Settled Fine	Clear, stable, and very good weather.
+B	Fine Weather	Generally sunny and pleasant.
+C	Becoming Fine	Weather is improving toward sunny conditions.
+D	Fine, Becoming Less Settled	Currently good, but signs of change ahead.
+E	Fine, Possibly Showers	Mostly good, but with a slight chance of rain.
+F	Fairly Fine, Improving	Decent weather that is getting better.
+G	Fairly Fine, Possibly Showers Early	Early morning rain followed by clearing.
+H	Fairly Fine, Showery Later	Good morning weather with rain expected later.
+I	Showery Early, Improving	Rain at first, then clearing up.
+J	Changeable, Mending	Unstable weather that is starting to improve.
+K	Fairly Fine, Showers Likely	Mostly okay, but likely to rain at some point.
+L	Rather Unsettled, Clearing Later	Generally cloudy/poor, but will improve later.
+M	Unsettled, Probably Improving	Poor weather with a high chance of getting better.
+N	Showery, Bright Intervals	Frequent rain mixed with short sunny periods.
+O	Showery, Becoming More Unsettled	Rain is getting more frequent or heavier.
+P	Changeable, Some Rain	Highly variable weather with guaranteed light rain.
+Q	Unsettled, Short Fine Intervals	Mostly rainy/poor with very brief breaks of sun.
+R	Unsettled, Rain Later	Overcast and poor, with rain arriving soon.
+S	Unsettled, Rain at Times	Ongoing poor weather with intermittent rain.
+T	Very Unsettled, Finer at Times	Harsh weather with only rare, brief improvements.
+U	Rain at Times, Worse Later	Intermittent rain that will become a steady downpour.
+V	Rain at Times, Becoming Very Unsettled	Stop-and-start rain leading into stormy conditions.
+W	Rain at Frequent Intervals	Rain happens often throughout the forecast period.
+X	Very Unsettled, Rain	Consistently poor weather with significant rainfall.
+Y	Stormy, Possibly Improving	High winds and heavy rain, but the worst may pass.
+Z	Stormy, Much Rain	Severe weather with heavy, continuous
